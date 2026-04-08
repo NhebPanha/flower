@@ -1,0 +1,463 @@
+import 'package:flower/core/utils/app_color.dart';
+import 'package:flower/core/utils/app_label/app_label.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+class SignUpPage extends StatelessWidget {
+  const SignUpPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(useMaterial3: true, fontFamily: 'Manrope'),
+      home: const SignUpScreen(),
+    );
+  }
+}
+
+class SignUpScreen extends StatefulWidget {
+  const SignUpScreen({super.key});
+
+  @override
+  State<SignUpScreen> createState() => _SignUpScreenState();
+}
+
+class _SignUpScreenState extends State<SignUpScreen> {
+  // 1. Add Controllers
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+
+  // 2. Add UI State variables
+  bool _agreeToTerms = false;
+  bool _isLoading = false;
+  bool _obscurePassword = true;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  // 3. Functional Sign Up Logic
+  Future<void> _handleSignUp() async {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    // Basic Validation
+    if (name.isEmpty || email.isEmpty || password.isEmpty) {
+      _showSnackBar("Please fill in all fields", Colors.orange);
+      return;
+    }
+
+    if (!_agreeToTerms) {
+      _showSnackBar("Please agree to the terms", Colors.orange);
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final supabase = Supabase.instance.client;
+
+      // Step A: Create Auth User
+      final AuthResponse res = await supabase.auth.signUp(
+        email: email,
+        password: password,
+        data: {'full_name': name}, // Metadata is also stored in Auth
+      );
+
+      final user = res.user;
+
+      if (user != null) {
+        // Step B: Insert into 'users' table
+        await supabase.from('users').insert({
+          'id': user.id,
+          'name': name,
+          'email': email,
+          'phone': '',
+          'address': '',
+          'image': '',
+          'created_at': DateTime.now().toIso8601String(),
+        });
+
+        if (mounted) {
+          _showSnackBar("Account created successfully!", Colors.green);
+          // Navigator.pushReplacement(...) -> Go to Home or Email Verification
+        }
+      }
+    } on AuthException catch (e) {
+      _showSnackBar(e.message, Colors.red);
+    } catch (e) {
+      _showSnackBar("An unexpected error occurred", Colors.red);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showSnackBar(String message, Color color) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message), backgroundColor: color));
+  }
+
+  Future<void> showIosNotification() async {
+    // Define iOS specific details
+    const DarwinNotificationDetails darwinNotificationDetails =
+        DarwinNotificationDetails(
+          presentAlert: true, // Display the banner at the top
+          presentBadge: true, // Update the app icon badge
+          presentSound: true, // Play the default notification sound
+          interruptionLevel: InterruptionLevel.active, // Ensures it pops up
+        );
+
+    // Define General Notification Details
+    const NotificationDetails notificationDetails = NotificationDetails(
+      iOS: darwinNotificationDetails,
+      // Note: Android is required in NotificationDetails constructor
+      android: AndroidNotificationDetails(
+        'your_channel_id',
+        'your_channel_name',
+        importance: Importance.max,
+        priority: Priority.high,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Stack(
+        children: [
+          // Decorative backgrounds kept from your original code...
+          _buildBackgroundDecor(),
+
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(),
+                  const SizedBox(height: 24),
+                  _buildHeroText(),
+                  const SizedBox(height: 40),
+
+                  // Form Fields linked to controllers
+                  _buildInputField(
+                    label: "FULL NAME",
+                    hint: "John Doe",
+                    controller: _nameController,
+                  ),
+                  const SizedBox(height: 24),
+                  _buildInputField(
+                    label: "EMAIL",
+                    hint: "example@email.com",
+                    controller: _emailController,
+                  ),
+                  const SizedBox(height: 24),
+                  _buildInputField(
+                    label: "PASSWORD",
+                    hint: "••••••••",
+                    isPassword: true,
+                    controller: _passwordController,
+                  ),
+
+                  const SizedBox(height: 16),
+                  _buildTermsCheckbox(),
+                  const SizedBox(height: 32),
+
+                  // Functional Button
+                  _buildSignUpButton(),
+
+                  const SizedBox(height: 32),
+                  _buildLoginLink(),
+                  const SizedBox(height: 40),
+                  _buildPerksCard(),
+                  const SizedBox(height: 32),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- Sub-Widgets with logic integrated ---
+
+  Widget _buildSignUpButton() {
+    return Container(
+      width: double.infinity,
+      height: 64,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppColor.colorPrimary.withOpacity(0.3),
+            blurRadius: 40,
+            offset: const Offset(0, 20),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: _isLoading ? null : _handleSignUp,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColor.colorPrimary,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 0,
+        ),
+        child: _isLoading
+            ? const CircularProgressIndicator(color: Colors.white)
+            : const AppLabel(
+                text: "Create Account",
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+      ),
+    );
+  }
+
+  Widget _buildInputField({
+    required String label,
+    required String hint,
+    required TextEditingController controller,
+    bool isPassword = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              color: AppColor.colorOnSurfaceVariant,
+              letterSpacing: 1,
+            ),
+          ),
+        ),
+        TextField(
+          controller: controller,
+          obscureText: isPassword ? _obscurePassword : false,
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(color: Color(0xFFA9A9D7)),
+            filled: true,
+            fillColor: AppColor.colorContainerHigh.withOpacity(0.5),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 18,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: const BorderSide(
+                color: AppColor.colorPrimary,
+                width: 2,
+              ),
+            ),
+            suffixIcon: isPassword
+                ? IconButton(
+                    icon: Icon(
+                      _obscurePassword
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                      size: 20,
+                      color: AppColor.colorOnSurfaceVariant,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
+                  )
+                : null,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ... (Rest of your UI widgets: _buildHeader, _buildHeroText, etc., stay mostly the same)
+
+  Widget _buildTermsCheckbox() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Checkbox(
+          value: _agreeToTerms,
+          activeColor: AppColor.colorPrimary,
+          onChanged: (val) => setState(() => _agreeToTerms = val!),
+        ),
+        const Expanded(
+          child: AppLabel(
+            text: "I agree to the Terms of Service and Privacy Policy.",
+            fontSize: 14,
+            color: AppColor.colorOnSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBackgroundDecor() {
+    return Stack(
+      children: [
+        Positioned(
+          top: -40,
+          right: -40,
+          child: Container(
+            width: double.infinity,
+            height: double.infinity,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColor.colorSecondaryContainer.withValues(alpha: 0.4),
+            ),
+          ),
+        ),
+        Positioned(
+          bottom: -80,
+          left: -80,
+          child: Container(
+            width: 256,
+            height: 256,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColor.colorPrimary.withValues(alpha: 0.05),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.arrow_back),
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.white.withOpacity(0.5),
+            ),
+          ),
+          const AppLabel(
+            text: "STEP 01 / 02",
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 2.0,
+            color: AppColor.colorPrimary,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeroText() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        RichText(
+          text: const TextSpan(
+            style: TextStyle(
+              fontSize: 42,
+              fontWeight: FontWeight.w800,
+              color: AppColor.colorOnSurface,
+              letterSpacing: -1.5,
+              height: 1.1,
+            ),
+            children: [
+              TextSpan(text: "Join us "),
+              TextSpan(
+                text: "today",
+                style: TextStyle(
+                  color: AppColor.colorPrimary,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        const AppLabel(
+          text: "Enter your details to create an account and start shopping.",
+          fontSize: 17,
+          color: AppColor.colorOnSurfaceVariant,
+          height: 1.5,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLoginLink() {
+    return Center(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const AppLabel(
+            text: "Already have an account? ",
+            color: AppColor.colorOnSurfaceVariant,
+          ),
+          GestureDetector(
+            onTap: () => Navigator.pop(context), // Typically goes back to Login
+            child: const AppLabel(
+              text: "Log in",
+              color: AppColor.colorPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPerksCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF2EFFF),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.waves, color: AppColor.colorPrimary),
+          SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AppLabel(
+                  text: "MEMBER PERKS",
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  color: AppColor.colorOnSurfaceVariant,
+                ),
+                AppLabel(
+                  text: "Early access to limited drops.",
+                  fontSize: 12,
+                  color: AppColor.colorOnSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+          Icon(Icons.stars, color: Colors.orange),
+        ],
+      ),
+    );
+  }
+}
