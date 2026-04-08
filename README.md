@@ -4,13 +4,11 @@
   background: rgba(255, 0, 0, 0.3);
   padding: 20px;
   border-radius: 12px;
-  animation: pulse 2s infinite;
 ">
 🌸 FLOWER APP 🌸
 </h1>
 
-<p><b>Owner:</b> Nheb Panha</p>
-<p><b>Version:</b> 1.0.0+1</p>
+<img src="https://readme-typing-svg.herokuapp.com?color=FF4D4D&size=22&center=true&vCenter=true&width=500&lines=Owner:+Nheb+Panha;Version:+1.0.0%2B1" />
 
 </div>
 
