@@ -38,12 +38,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _agreeToTerms = false;
   bool _isLoading = false;
   bool _obscurePassword = true;
-
   Future<void> _handleSignUp() async {
+    if (_isLoading) return; // 🚀 prevent spam clicks
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
-    // Validate fields
+
+    // Validation
     if (name.isEmpty || email.isEmpty || password.isEmpty) {
       AppNotification.show(
         message: "Please fill in all fields",
@@ -52,6 +53,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
       );
       return;
     }
+
     if (!_agreeToTerms) {
       AppNotification.show(
         message: "Please agree to the terms",
@@ -60,39 +62,67 @@ class _SignUpScreenState extends State<SignUpScreen> {
       );
       return;
     }
+
     setState(() => _isLoading = true);
+
     try {
       final supabase = Supabase.instance.client;
-      // Sign up user with email & password
+
       final res = await supabase.auth.signUp(email: email, password: password);
 
       final user = res.user;
 
-      if (user != null) {
-        // Insert profile info into 'users' table
-        await supabase.from('users').insert({
-          'id': user.id, // must match auth.uid() for RLS
-          'name': name,
-          'email': email,
-          'phone': '',
-          'address': '',
-          'image': 'https://i.pravatar.cc/300',
-        });
+      if (user == null) {
+        AppNotification.show(
+          message: "Signup failed",
+          color: Colors.red,
+          icon: Icons.error,
+        );
+        return;
+      }
+
+      // ✅ IMPORTANT: Check email confirmation
+      final isEmailConfirmed = res.session != null;
+
+      if (!isEmailConfirmed) {
+        AppNotification.show(
+          message: "Account created! Please verify your email.",
+          color: Colors.orange,
+          icon: Icons.info,
+        );
+      } else {
         AppNotification.show(
           message: "Account created successfully!",
           color: Colors.green,
           icon: Icons.check_circle,
         );
       }
+
+      // ✅ Insert profile safely
+      try {
+        await supabase.from('users').insert({
+          'id': user.id,
+          'name': name,
+          'email': email,
+          'phone': '',
+          'address': '',
+          'image': 'https://i.pravatar.cc/300',
+        });
+      } catch (e) {
+        log("Profile insert error: $e");
+      }
     } on AuthException catch (e) {
+      log("Auth error: ${e.message}");
       AppNotification.show(
-        message: "Auth error: ${e.message}",
+        message: e.message,
         color: Colors.red,
         icon: Icons.error,
       );
     } catch (e) {
+      log("Unexpected error: $e");
+
       AppNotification.show(
-        message: "Unexpected error: $e",
+        message: "Something went wrong",
         color: Colors.red,
         icon: Icons.error,
       );
@@ -302,8 +332,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
           top: -40,
           right: -40,
           child: Container(
-            width: double.infinity,
-            height: double.infinity,
+            width: width,
+            height: height,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: AppColor.colorSecondaryContainer.withValues(alpha: 0.4),

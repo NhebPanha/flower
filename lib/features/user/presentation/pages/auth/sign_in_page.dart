@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:developer';
 import 'package:flower/core/utils/app_color.dart';
 import 'package:flower/core/utils/app_label/app_label.dart';
@@ -13,6 +12,7 @@ class SignInPage extends StatefulWidget {
   @override
   State<SignInPage> createState() => _SignInPageState();
 }
+
 class _SignInPageState extends State<SignInPage> {
   // 1. Controllers to capture input
   final emailController = TextEditingController();
@@ -28,6 +28,7 @@ class _SignInPageState extends State<SignInPage> {
     passwordController.dispose();
     super.dispose();
   }
+
   Future<void> signIn() async {
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
@@ -44,11 +45,12 @@ class _SignInPageState extends State<SignInPage> {
       );
       return;
     }
+
     setState(() => isLoading = true);
+
     try {
       final supabase = Supabase.instance.client;
 
-      // Sign in with email & password
       final response = await supabase.auth.signInWithPassword(
         email: email,
         password: password,
@@ -58,16 +60,13 @@ class _SignInPageState extends State<SignInPage> {
 
       if (user == null || response.session == null) {
         AppNotification.show(
-          message: response.error?.message ?? "Invalid credentials",
+          message: "Invalid email or password",
           color: Colors.red,
           icon: Icons.error,
         );
         return;
       }
-
-      log("Supabase user: ${jsonEncode(user.toJson())}");
-
-      // Fetch user profile from 'users' table
+      // Fetch profile
       final profile = await supabase
           .from('users')
           .select()
@@ -82,19 +81,31 @@ class _SignInPageState extends State<SignInPage> {
         );
         return;
       }
+
       log("User profile: $profile");
+
       AppNotification.show(
         message: "Login Successful!",
         color: Colors.green,
         icon: Icons.check_circle,
       );
+
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => ProfilePage()),
       );
-    } catch (e) {
+    } on AuthException catch (e) {
+      log("Auth error: ${e.message}");
       AppNotification.show(
-        message: "Unexpected error: $e",
+        message: e.message,
+        color: Colors.red,
+        icon: Icons.error,
+      );
+    } catch (e) {
+      log("Unexpected error: $e");
+
+      AppNotification.show(
+        message: "Something went wrong. Try again.",
         color: Colors.red,
         icon: Icons.error,
       );
@@ -390,8 +401,4 @@ class _SignInPageState extends State<SignInPage> {
       ),
     );
   }
-}
-
-extension on AuthResponse {
-  get error => null;
 }

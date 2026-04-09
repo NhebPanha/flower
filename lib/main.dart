@@ -11,7 +11,8 @@ void main() async {
   // Initialize Supabase
   await Supabase.initialize(
     url: "https://tirvuvtypqmwcopnwllc.supabase.co",
-    anonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpcnZ1dnR5cHFtd2NvcG53bGxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk0Nzk1MjMsImV4cCI6MjA3NTA1NTUyM30.z4sI5qMXq6PkRZWPi2xW-fyr6nPs5vG27NgdrjYrWvQ",
+    anonKey:
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpcnZ1dnR5cHFtd2NvcG53bGxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk0Nzk1MjMsImV4cCI6MjA3NTA1NTUyM30.z4sI5qMXq6PkRZWPi2xW-fyr6nPs5vG27NgdrjYrWvQ",
   );
   await initUser();
 
