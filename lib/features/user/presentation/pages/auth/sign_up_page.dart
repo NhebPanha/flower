@@ -1,7 +1,9 @@
+import 'dart:developer';
 import 'package:flower/core/utils/app_color.dart';
 import 'package:flower/core/utils/app_label/app_label.dart';
+import 'package:flower/core/utils/app_notification.dart';
+import 'package:flower/features/user/presentation/pages/auth/sign_in_page.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SignUpPage extends StatelessWidget {
@@ -25,15 +27,79 @@ class SignUpScreen extends StatefulWidget {
 }
 
 class _SignUpScreenState extends State<SignUpScreen> {
-  // 1. Add Controllers
+  late double width = MediaQuery.of(context).size.width;
+  late double height = MediaQuery.of(context).size.height;
+  // Add Controllers
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  // 2. Add UI State variables
+  // Add UI State variables
   bool _agreeToTerms = false;
   bool _isLoading = false;
   bool _obscurePassword = true;
+
+  Future<void> _handleSignUp() async {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    // Validate fields
+    if (name.isEmpty || email.isEmpty || password.isEmpty) {
+      AppNotification.show(
+        message: "Please fill in all fields",
+        color: Colors.orange,
+        icon: Icons.error,
+      );
+      return;
+    }
+    if (!_agreeToTerms) {
+      AppNotification.show(
+        message: "Please agree to the terms",
+        color: Colors.orange,
+        icon: Icons.error,
+      );
+      return;
+    }
+    setState(() => _isLoading = true);
+    try {
+      final supabase = Supabase.instance.client;
+      // Sign up user with email & password
+      final res = await supabase.auth.signUp(email: email, password: password);
+
+      final user = res.user;
+
+      if (user != null) {
+        // Insert profile info into 'users' table
+        await supabase.from('users').insert({
+          'id': user.id, // must match auth.uid() for RLS
+          'name': name,
+          'email': email,
+          'phone': '',
+          'address': '',
+          'image': 'https://i.pravatar.cc/300',
+        });
+        AppNotification.show(
+          message: "Account created successfully!",
+          color: Colors.green,
+          icon: Icons.check_circle,
+        );
+      }
+    } on AuthException catch (e) {
+      AppNotification.show(
+        message: "Auth error: ${e.message}",
+        color: Colors.red,
+        icon: Icons.error,
+      );
+    } catch (e) {
+      AppNotification.show(
+        message: "Unexpected error: $e",
+        color: Colors.red,
+        icon: Icons.error,
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -41,92 +107,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
-  }
-
-  // 3. Functional Sign Up Logic
-  Future<void> _handleSignUp() async {
-    final name = _nameController.text.trim();
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-
-    // Basic Validation
-    if (name.isEmpty || email.isEmpty || password.isEmpty) {
-      _showSnackBar("Please fill in all fields", Colors.orange);
-      return;
-    }
-
-    if (!_agreeToTerms) {
-      _showSnackBar("Please agree to the terms", Colors.orange);
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      final supabase = Supabase.instance.client;
-
-      // Step A: Create Auth User
-      final AuthResponse res = await supabase.auth.signUp(
-        email: email,
-        password: password,
-        data: {'full_name': name}, // Metadata is also stored in Auth
-      );
-
-      final user = res.user;
-
-      if (user != null) {
-        // Step B: Insert into 'users' table
-        await supabase.from('users').insert({
-          'id': user.id,
-          'name': name,
-          'email': email,
-          'phone': '',
-          'address': '',
-          'image': '',
-          'created_at': DateTime.now().toIso8601String(),
-        });
-
-        if (mounted) {
-          _showSnackBar("Account created successfully!", Colors.green);
-          // Navigator.pushReplacement(...) -> Go to Home or Email Verification
-        }
-      }
-    } on AuthException catch (e) {
-      _showSnackBar(e.message, Colors.red);
-    } catch (e) {
-      _showSnackBar("An unexpected error occurred", Colors.red);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  void _showSnackBar(String message, Color color) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message), backgroundColor: color));
-  }
-
-  Future<void> showIosNotification() async {
-    // Define iOS specific details
-    const DarwinNotificationDetails darwinNotificationDetails =
-        DarwinNotificationDetails(
-          presentAlert: true, // Display the banner at the top
-          presentBadge: true, // Update the app icon badge
-          presentSound: true, // Play the default notification sound
-          interruptionLevel: InterruptionLevel.active, // Ensures it pops up
-        );
-
-    // Define General Notification Details
-    const NotificationDetails notificationDetails = NotificationDetails(
-      iOS: darwinNotificationDetails,
-      // Note: Android is required in NotificationDetails constructor
-      android: AndroidNotificationDetails(
-        'your_channel_id',
-        'your_channel_name',
-        importance: Importance.max,
-        priority: Priority.high,
-      ),
-    );
   }
 
   @override
@@ -190,23 +170,26 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   // --- Sub-Widgets with logic integrated ---
-
   Widget _buildSignUpButton() {
     return Container(
-      width: double.infinity,
+      width: width * 0.8,
       height: 64,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: AppColor.colorPrimary.withOpacity(0.3),
+            color: AppColor.colorPrimary.withValues(alpha: 0.3),
             blurRadius: 40,
             offset: const Offset(0, 20),
           ),
         ],
       ),
       child: ElevatedButton(
-        onPressed: _isLoading ? null : _handleSignUp,
+        // onPressed: _isLoading ? null : _handleSignUp,
+        onPressed: () {
+          _handleSignUp();
+          log("Sign Up button pressed");
+        },
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColor.colorPrimary,
           foregroundColor: Colors.white,
@@ -290,7 +273,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     );
   }
 
-  // ... (Rest of your UI widgets: _buildHeader, _buildHeroText, etc., stay mostly the same)
+  // Rest of your UI widgets: _buildHeader, _buildHeroText, etc., stay mostly the same
 
   Widget _buildTermsCheckbox() {
     return Row(
@@ -353,7 +336,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
             onPressed: () => Navigator.pop(context),
             icon: const Icon(Icons.arrow_back),
             style: IconButton.styleFrom(
-              backgroundColor: Colors.white.withOpacity(0.5),
+              backgroundColor: Colors.white.withValues(alpha: .5),
             ),
           ),
           const AppLabel(
@@ -414,7 +397,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
             color: AppColor.colorOnSurfaceVariant,
           ),
           GestureDetector(
-            onTap: () => Navigator.pop(context), // Typically goes back to Login
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SignInPage()),
+              );
+            }, // Typically goes back to Login
             child: const AppLabel(
               text: "Log in",
               color: AppColor.colorPrimary,

@@ -1,23 +1,24 @@
+import 'dart:convert';
 import 'dart:developer';
 import 'package:flower/core/utils/app_color.dart';
 import 'package:flower/core/utils/app_label/app_label.dart';
+import 'package:flower/core/utils/app_notification.dart';
+import 'package:flower/features/user/presentation/pages/auth/profile_page.dart';
 import 'package:flower/features/user/presentation/pages/auth/sign_up_page.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SignInPage extends StatefulWidget {
   const SignInPage({super.key});
-
   @override
   State<SignInPage> createState() => _SignInPageState();
 }
-
 class _SignInPageState extends State<SignInPage> {
   // 1. Controllers to capture input
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
-  
-  // 2. UI State variables
+
+  // UI State variables
   bool isLoading = false;
   bool obscurePassword = true;
 
@@ -27,60 +28,78 @@ class _SignInPageState extends State<SignInPage> {
     passwordController.dispose();
     super.dispose();
   }
-
-  // 3. Functional Sign In Logic
   Future<void> signIn() async {
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
 
+    log("Email: $email");
+    log("Password: $password");
+
+    // Validation
     if (email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please fill in all fields")),
+      AppNotification.show(
+        message: "Please fill in all fields",
+        color: Colors.orange,
+        icon: Icons.error,
       );
       return;
     }
-
     setState(() => isLoading = true);
-
     try {
       final supabase = Supabase.instance.client;
+
+      // Sign in with email & password
       final response = await supabase.auth.signInWithPassword(
         email: email,
         password: password,
       );
 
-      if (response.user != null) {
-        // Fetch user profile from 'users' table if needed
-        final data = await supabase
-            .from('users')
-            .select()
-            .eq('id', response.user!.id)
-            .single();
-        
-        log('Signed in! User profile: $data');
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Login Successful!")),
-          );
-          // Navigate to Home Page here
-          // Navigator.pushReplacement(...)
-        }
-      }
-    } on AuthException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+      final user = response.user;
+
+      if (user == null || response.session == null) {
+        AppNotification.show(
+          message: response.error?.message ?? "Invalid credentials",
+          color: Colors.red,
+          icon: Icons.error,
         );
+        return;
       }
+
+      log("Supabase user: ${jsonEncode(user.toJson())}");
+
+      // Fetch user profile from 'users' table
+      final profile = await supabase
+          .from('users')
+          .select()
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (profile == null) {
+        AppNotification.show(
+          message: "User profile not found",
+          color: Colors.orange,
+          icon: Icons.error,
+        );
+        return;
+      }
+      log("User profile: $profile");
+      AppNotification.show(
+        message: "Login Successful!",
+        color: Colors.green,
+        icon: Icons.check_circle,
+      );
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => ProfilePage()),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("An unexpected error occurred")),
-        );
-      }
+      AppNotification.show(
+        message: "Unexpected error: $e",
+        color: Colors.red,
+        icon: Icons.error,
+      );
     } finally {
-      if (mounted) setState(() => isLoading = false);
+      setState(() => isLoading = false);
     }
   }
 
@@ -147,7 +166,9 @@ class _SignInPageState extends State<SignInPage> {
                       borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF2A2B51).withValues(alpha: 0.06),
+                          color: const Color(
+                            0xFF2A2B51,
+                          ).withValues(alpha: 0.06),
                           blurRadius: 80,
                           offset: const Offset(0, 40),
                         ),
@@ -197,14 +218,18 @@ class _SignInPageState extends State<SignInPage> {
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColor.colorPrimary.withValues(alpha: 0.2),
+                                color: AppColor.colorPrimary.withValues(
+                                  alpha: 0.2,
+                                ),
                                 blurRadius: 20,
                                 offset: const Offset(0, 10),
                               ),
                             ],
                           ),
                           child: ElevatedButton(
-                            onPressed: isLoading ? null : signIn,
+                            onPressed: () {
+                              signIn();
+                            },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.transparent,
                               shadowColor: Colors.transparent,
@@ -213,7 +238,9 @@ class _SignInPageState extends State<SignInPage> {
                               ),
                             ),
                             child: isLoading
-                                ? const CircularProgressIndicator(color: Colors.white)
+                                ? const CircularProgressIndicator(
+                                    color: Colors.white,
+                                  )
                                 : const AppLabel(
                                     text: "Sign In",
                                     color: AppColor.background,
@@ -246,7 +273,9 @@ class _SignInPageState extends State<SignInPage> {
                         onTap: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (_) => const SignUpPage()),
+                            MaterialPageRoute(
+                              builder: (_) => const SignUpPage(),
+                            ),
                           );
                         },
                         child: AppLabel(
@@ -304,10 +333,13 @@ class _SignInPageState extends State<SignInPage> {
         suffixIcon: isPassword
             ? IconButton(
                 icon: Icon(
-                  obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                  obscurePassword
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
                   size: 20,
                 ),
-                onPressed: () => setState(() => obscurePassword = !obscurePassword),
+                onPressed: () =>
+                    setState(() => obscurePassword = !obscurePassword),
               )
             : null,
       ),
@@ -317,15 +349,23 @@ class _SignInPageState extends State<SignInPage> {
   Widget _buildDivider() {
     return Row(
       children: [
-        Expanded(child: Divider(color: const Color(0xFF73739E).withValues(alpha: 0.2))),
+        Expanded(
+          child: Divider(color: const Color(0xFF73739E).withValues(alpha: 0.2)),
+        ),
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 12),
           child: Text(
             "OR CONTINUE WITH",
-            style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF73739E)),
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF73739E),
+            ),
           ),
         ),
-        Expanded(child: Divider(color: const Color(0xFF73739E).withValues(alpha: 0.2))),
+        Expanded(
+          child: Divider(color: const Color(0xFF73739E).withValues(alpha: 0.2)),
+        ),
       ],
     );
   }
@@ -350,4 +390,8 @@ class _SignInPageState extends State<SignInPage> {
       ),
     );
   }
+}
+
+extension on AuthResponse {
+  get error => null;
 }
