@@ -39,12 +39,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   Future<void> _handleSignUp() async {
-    if (_isLoading) return; // 🚀 prevent spam clicks
+    if (_isLoading) return;
     final name = _nameController.text.trim();
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
-    // Validation
+    // ✅ Validate input
     if (name.isEmpty || email.isEmpty || password.isEmpty) {
       AppNotification.show(
         message: "Please fill in all fields",
@@ -68,7 +68,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
     try {
       final supabase = Supabase.instance.client;
 
-      final res = await supabase.auth.signUp(email: email, password: password);
+      // ✅ SIGN UP USER
+      final res = await supabase.auth.signUp(
+        email: email,
+        password: password,
+        data: {
+          'name': name, // optional metadata
+        },
+      );
 
       final user = res.user;
 
@@ -81,7 +88,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
         return;
       }
 
-      // ✅ IMPORTANT: Check email confirmation
+      // ✅ CHECK EMAIL CONFIRMATION
       final isEmailConfirmed = res.session != null;
 
       if (!isEmailConfirmed) {
@@ -96,9 +103,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
           color: Colors.green,
           icon: Icons.check_circle,
         );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const SignInPage()),
+        );
       }
 
-      // ✅ Insert profile safely
+      // ✅ INSERT PROFILE (SAFE)
       try {
         await supabase.from('users').insert({
           'id': user.id,
@@ -106,13 +117,21 @@ class _SignUpScreenState extends State<SignUpScreen> {
           'email': email,
           'phone': '',
           'address': '',
-          'image': 'https://i.pravatar.cc/300',
+          'image': '',
         });
       } catch (e) {
+        // ⚠️ Prevent crash if already inserted
         log("Profile insert error: $e");
       }
+
+      // ✅ OPTIONAL: Navigate after signup
+      // Navigator.pushReplacement(
+      //   context,
+      //   MaterialPageRoute(builder: (_) => ProfilePage()),
+      // );
     } on AuthException catch (e) {
       log("Auth error: ${e.message}");
+
       AppNotification.show(
         message: e.message,
         color: Colors.red,

@@ -14,7 +14,7 @@ class SignInPage extends StatefulWidget {
 }
 
 class _SignInPageState extends State<SignInPage> {
-  // 1. Controllers to capture input
+  // Controllers to capture input
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
 
@@ -30,13 +30,15 @@ class _SignInPageState extends State<SignInPage> {
   }
 
   Future<void> signIn() async {
+    if (isLoading) return; // 🚀 prevent spam click
+
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
 
     log("Email: $email");
     log("Password: $password");
 
-    // Validation
+    // ✅ Validation
     if (email.isEmpty || password.isEmpty) {
       AppNotification.show(
         message: "Please fill in all fields",
@@ -51,6 +53,7 @@ class _SignInPageState extends State<SignInPage> {
     try {
       final supabase = Supabase.instance.client;
 
+      // ✅ LOGIN
       final response = await supabase.auth.signInWithPassword(
         email: email,
         password: password,
@@ -58,7 +61,7 @@ class _SignInPageState extends State<SignInPage> {
 
       final user = response.user;
 
-      if (user == null || response.session == null) {
+      if (user == null) {
         AppNotification.show(
           message: "Invalid email or password",
           color: Colors.red,
@@ -66,36 +69,55 @@ class _SignInPageState extends State<SignInPage> {
         );
         return;
       }
-      // Fetch profile
+
+      // ✅ CHECK EMAIL VERIFIED (IMPORTANT)
+      if (user.emailConfirmedAt == null) {
+        AppNotification.show(
+          message: "Please verify your email first",
+          color: Colors.orange,
+          icon: Icons.warning,
+        );
+
+        await supabase.auth.signOut();
+        return;
+      }
+
+      // ✅ FETCH PROFILE
       final profile = await supabase
           .from('users')
           .select()
           .eq('id', user.id)
           .maybeSingle();
 
+      // ✅ IF PROFILE NOT FOUND → CREATE ONE (AUTO FIX)
       if (profile == null) {
-        AppNotification.show(
-          message: "User profile not found",
-          color: Colors.orange,
-          icon: Icons.error,
-        );
-        return;
+        log("Profile not found → creating new profile");
+
+        await supabase.from('users').insert({
+          'id': user.id,
+          'name': user.userMetadata?['name'] ?? '',
+          'email': user.email,
+          'phone': '',
+          'address': '',
+          'image': '',
+        });
       }
 
-      log("User profile: $profile");
-
+      // ✅ SUCCESS
       AppNotification.show(
         message: "Login Successful!",
         color: Colors.green,
         icon: Icons.check_circle,
       );
 
+      // ✅ NAVIGATE
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => ProfilePage()),
       );
     } on AuthException catch (e) {
       log("Auth error: ${e.message}");
+
       AppNotification.show(
         message: e.message,
         color: Colors.red,
@@ -261,13 +283,13 @@ class _SignInPageState extends State<SignInPage> {
                           ),
                         ),
 
-                        const SizedBox(height: 32),
+                        SizedBox(height: 32),
                         _buildDivider(),
-                        const SizedBox(height: 24),
+                        SizedBox(height: 24),
                         Row(
                           children: [
                             Expanded(child: _buildSocialButton("Google")),
-                            const SizedBox(width: 16),
+                            SizedBox(width: 16),
                             Expanded(child: _buildSocialButton("Apple")),
                           ],
                         ),
@@ -275,11 +297,11 @@ class _SignInPageState extends State<SignInPage> {
                     ),
                   ),
 
-                  const SizedBox(height: 40),
+                  SizedBox(height: 40),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text("New to the gallery? "),
+                      AppLabel(text: "New to the gallery? "),
                       GestureDetector(
                         onTap: () {
                           Navigator.push(
