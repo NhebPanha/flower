@@ -121,11 +121,3 @@ flutter run
 </div>
 
 ---
-
-<style>
-@keyframes pulse {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.03); }
-  100% { transform: scale(1); }
-}
-</style>
